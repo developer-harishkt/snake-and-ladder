@@ -20,7 +20,8 @@ type GameService struct {
 	Players                map[int32]*models.Player
 	Board                  *BoardService
 	PlayerId, LastPlayerId int32
-	Dice                   *DiceService
+	Dice                   DiceRoller
+	Observers              []Observer
 }
 
 func NewGameService(dimension int, attributePositionMap []*models.Attribute) (*GameService, error) {
@@ -29,14 +30,17 @@ func NewGameService(dimension int, attributePositionMap []*models.Attribute) (*G
 		return nil, err
 	}
 
-	return &GameService{
+	gs := &GameService{
 		Status:       Initialised,
 		Players:      make(map[int32]*models.Player),
 		Board:        boardService,
 		PlayerId:     0,
 		LastPlayerId: 0,
-		Dice:         NewDiceService(1, 6),
-	}, nil
+		Dice:         GetDiceRoller(1, 6, RandomDiceRollerStrategy),
+		Observers:    []Observer{},
+	}
+	gs.RegisterObserver(NewConsoleObserver())
+	return gs, nil
 }
 
 func (gs *GameService) AddPlayer(name string) error {
@@ -80,29 +84,41 @@ func (gs *GameService) Roll(player *models.Player) {
 	}
 
 	steps := gs.Dice.Roll()
-	fmt.Println(fmt.Sprintf("Player %s rolled a %d", player.GetName(), steps))
-	playerReachedEnd, err := gs.Board.MovePlayer(player, steps)
+	playerReachedEnd, attribute, err := gs.Board.MovePlayer(player, steps)
 	if err != nil {
 		fmt.Errorf("Error moving player %s: %v", player.GetName(), err)
 		return
 	}
+	gs.NotifyPlayerPositionUpdates(player.Id, steps, player.GetPosition(), attribute)
 	gs.LastPlayerId = player.Id
 	if playerReachedEnd {
-		fmt.Println(fmt.Sprintf("Player %s has reached the end", player.GetName()))
 		gs.Status = Complete
+		gs.NotifyGameOver(player.Id)
 	}
 }
 
 func (gs *GameService) PrintBoard() {
-	for _, player := range gs.Players {
-		position := player.GetPosition()
-		fmt.Println(fmt.Sprintf("Player %s is at position %d", player.GetName(), position))
-	}
+	gs.NotifyPrintBoard(gs.Players, gs.Board.GetAttributesLocation())
+}
 
-	for position, attribute := range gs.Board.GetAttributesLocation() {
-		fmt.Println(fmt.Sprintf("Attribute %s is at position %d", attribute.Name, position))
-	}
+func (gs *GameService) RegisterObserver(observer Observer) {
+	gs.Observers = append(gs.Observers, observer)
+}
 
-	fmt.Println(fmt.Sprintf("Game Status: %d", gs.Status))
-	fmt.Println(fmt.Sprintf("Last Player: %d", gs.LastPlayerId))
+func (gs *GameService) NotifyPlayerPositionUpdates(playerId int32, roll, position int, attribute string) {
+	for _, observer := range gs.Observers {
+		observer.PlayerPosition(playerId, roll, position, attribute)
+	}
+}
+
+func (gs *GameService) NotifyGameOver(playerId int32) {
+	for _, observer := range gs.Observers {
+		observer.GameOver(playerId)
+	}
+}
+
+func (gs *GameService) NotifyPrintBoard(players map[int32]*models.Player, attributes map[int]*models.Attribute) {
+	for _, observer := range gs.Observers {
+		observer.PrintBoard(players, attributes)
+	}
 }

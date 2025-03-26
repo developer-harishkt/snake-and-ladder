@@ -35,33 +35,33 @@ func (bs *BoardService) GetSquare(position int) (*models.Square, error) {
 	return square, nil
 }
 
-func (bs *BoardService) MovePlayer(player *models.Player, steps int) (bool, error) {
+func (bs *BoardService) MovePlayer(player *models.Player, steps int) (bool, string, error) {
 	// check if steps are valid
 	if steps < 0 {
-		return false, fmt.Errorf("steps must be non-negative")
+		return false, "", fmt.Errorf("steps must be non-negative")
 	}
 
 	if player.GetPosition()+steps > bs.Board.Dimension {
-		fmt.Println(fmt.Sprintf("player %s cannot move %d steps from position %d", player.GetName(), steps, player.GetPosition()))
-		return false, nil
+		fmt.Println(fmt.Sprintf("%s cannot move %d steps from position %d", player.GetName(), steps, player.GetPosition()))
+		return false, "", nil
 	}
 
 	player.Move(steps)
 	newPosition := player.GetPosition()
-	fmt.Println(fmt.Sprintf("player %s moved to position %d", player.GetName(), player.GetPosition()))
 
 	square, err := bs.GetSquare(newPosition)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 
 	if square.Attribute != nil {
+		fmt.Println(square.Attribute)
 		// this subtractions takes care of moving backward & forward
 		player.Move(square.Attribute.EndPos - square.Attribute.StartPos)
-		fmt.Println(fmt.Sprintf("player %s moved to position %d due to %s", player.GetName(), player.GetPosition(), square.Attribute.Name))
+		return player.GetPosition() == bs.Board.Dimension, square.Attribute.Name, nil
 	}
 
-	return player.GetPosition() == bs.Board.Dimension, nil
+	return player.GetPosition() == bs.Board.Dimension, "", nil
 }
 
 func (bs *BoardService) GetAttributesLocation() map[int]*models.Attribute {

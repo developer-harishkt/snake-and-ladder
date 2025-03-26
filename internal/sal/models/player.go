@@ -24,12 +24,6 @@ func NewPlayer(name string, id int32) (*Player, error) {
 }
 
 func (p *Player) Move(steps int) {
-	// check if steps are valid
-	if steps < 0 {
-		fmt.Println("steps must be non-negative")
-		return
-	}
-
 	p.Position += steps
 }
 
